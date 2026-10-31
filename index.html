@@ -1,0 +1,574 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Decodex">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}body{margin:0}*,*::before,*::after{box-sizing:border-box}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Decodex Reader</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IM+Fell+English+SC&family=Literata:opsz,wght@7..72,400;7..72,700&display=swap">
+<style>
+/* Layout: a single reading column, a mode bar on top and a transport bar fixed at the bottom, like a lectern with controls at hand. Rubric red marks the focus letter, as medieval scribes inked initials in red. */
+:root{
+  --paper:#F3F4F0; --surface:#FFFFFF; --ink:#1A1D26; --muted:#5D6371; --rule:#D9DCD4;
+  --lapis:#2D48A3; --lapis-ink:#FFFFFF; --rubric:#B3322A; --wash:#E6EAF5;
+  --display:"IM Fell English SC", Georgia, serif;
+  --body:"Literata", Georgia, "Times New Roman", serif;
+  --ui:"Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --paper:#121419; --surface:#1A1D24; --ink:#E8E5DC; --muted:#9BA1AE; --rule:#2D313B;
+  --lapis:#8FA3F2; --lapis-ink:#10131C; --rubric:#F2735F; --wash:#1E2436; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --paper:#121419; --surface:#1A1D24; --ink:#E8E5DC; --muted:#9BA1AE; --rule:#2D313B;
+  --lapis:#8FA3F2; --lapis-ink:#10131C; --rubric:#F2735F; --wash:#1E2436; color-scheme:dark }
+
+html,body{ background:var(--paper); color:var(--ink) }
+body{ font-family:var(--ui); font-size:15px; line-height:1.45;
+  padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); }
+body::before{ content:""; position:fixed; inset:0 0 auto; height:env(safe-area-inset-top, 0px); z-index:10; background:var(--paper) }
+.wrap{ max-width:720px; margin:0 auto; display:flex; flex-direction:column; gap:14px; padding-block:14px 170px }
+
+header.top{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap }
+.brand{ min-width:0 }
+.brand .mark{ font-family:var(--display); font-size:15px; letter-spacing:.06em; color:var(--rubric) }
+.brand h1{ font-family:var(--body); font-size:22px; line-height:1.2; margin:2px 0 0; font-weight:700; text-wrap:balance; overflow-wrap:anywhere }
+.brand .meta{ color:var(--muted); font-size:13px; margin-top:2px }
+.actions{ display:flex; gap:8px; flex-wrap:wrap }
+
+button,select,.btn{ font:inherit; color:inherit }
+.btn{ display:inline-flex; align-items:center; gap:6px; border:1px solid var(--rule); background:var(--surface); border-radius:999px; padding:8px 14px; cursor:pointer; font-weight:700; font-size:14px }
+.btn:hover{ border-color:var(--lapis) }
+.btn.primary{ background:var(--lapis); color:var(--lapis-ink); border-color:var(--lapis) }
+:focus-visible{ outline:2px solid var(--lapis); outline-offset:2px }
+
+.controls{ display:flex; flex-wrap:wrap; gap:10px; align-items:center }
+.seg{ display:inline-flex; border:1px solid var(--rule); border-radius:999px; background:var(--surface); padding:3px }
+.seg button{ border:0; background:transparent; padding:7px 14px; border-radius:999px; cursor:pointer; font-weight:700; font-size:14px; color:var(--muted) }
+.seg button[aria-pressed="true"]{ background:var(--wash); color:var(--ink) }
+select{ border:1px solid var(--rule); background:var(--surface); border-radius:10px; padding:8px 10px; font-size:14px; max-width:100%; min-width:0 }
+.secsel{ flex:1 1 200px; min-width:0 }
+.toggle{ display:inline-flex; align-items:center; gap:8px; cursor:pointer; font-size:14px; user-select:none }
+.toggle input{ appearance:none; width:38px; height:22px; border-radius:999px; background:var(--rule); position:relative; cursor:pointer; margin:0; transition:background .15s }
+.toggle input::after{ content:""; position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%; background:var(--surface); transition:transform .15s }
+.toggle input:checked{ background:var(--lapis) }
+.toggle input:checked::after{ transform:translateX(16px) }
+
+.notice{ background:var(--wash); border-radius:12px; padding:10px 14px; font-size:14px; color:var(--ink) }
+.notice[data-kind="error"]{ border-left:3px solid var(--rubric) }
+
+/* Read */
+.reader{ font-family:var(--body); font-size:18px; line-height:1.7; max-width:65ch }
+.reader section{ padding-block:4px 18px; border-bottom:1px solid var(--rule) }
+.reader section:last-child{ border-bottom:0 }
+.reader h2{ font-size:22px; line-height:1.3; margin:18px 0 10px; text-wrap:balance; scroll-margin-top:16px }
+.reader h3{ font-size:18px; margin:18px 0 6px; font-family:var(--ui) }
+.reader p{ margin:0 0 14px }
+.reader ul{ margin:0 0 14px; padding-left:22px }
+.reader blockquote{ margin:0 0 14px; padding-left:14px; border-left:3px solid var(--lapis); color:var(--ink) }
+.reader .note{ font-family:var(--ui); font-size:14px; color:var(--muted); font-style:italic }
+.bionic b{ font-weight:700 }
+.reader:not(.bionic) b{ font-weight:inherit }
+
+/* Flash */
+.flash{ display:flex; flex-direction:column; align-items:center; gap:18px; padding-block:24px }
+.flash .where{ color:var(--muted); font-size:13px; text-align:center; max-width:100%; overflow-wrap:anywhere; letter-spacing:.04em; text-transform:uppercase }
+.lectern{ width:100%; background:var(--surface); border:1px solid var(--rule); border-radius:16px; padding:36px 8px; cursor:pointer; position:relative }
+.lectern::before,.lectern::after{ content:""; position:absolute; left:50%; width:2px; height:12px; background:var(--rubric); opacity:.55 }
+.lectern::before{ top:14px } .lectern::after{ bottom:14px }
+.word{ display:grid; grid-template-columns:1fr auto 1fr; font-family:var(--body); font-size:clamp(30px, 9vw, 52px); line-height:1.1; white-space:pre }
+.word .l{ text-align:right } .word .p{ color:var(--rubric); font-weight:700 } .word .r{ text-align:left }
+.flash .hint{ color:var(--muted); font-size:13px; text-align:center }
+
+/* Listen */
+.listen{ font-family:var(--body); font-size:18px; line-height:1.7; max-width:65ch }
+.listen h2{ font-size:22px; line-height:1.3; margin:8px 0 12px }
+.listen .s{ cursor:pointer; border-radius:4px; padding:1px 0; transition:background .15s }
+.listen .s.h{ display:block; font-family:var(--ui); font-weight:700; margin:12px 0 4px }
+.listen .s.on{ background:var(--wash); box-shadow:0 0 0 3px var(--wash) }
+.listen .gap{ display:block; height:10px }
+
+/* Transport */
+.transport{ position:fixed; left:0; right:0; bottom:0; z-index:5; background:var(--surface); border-top:1px solid var(--rule);
+  padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px));
+  padding-block:10px calc(10px + env(safe-area-inset-bottom, 0px)) }
+.transport .inner{ max-width:720px; margin:0 auto; display:flex; flex-direction:column; gap:8px }
+.row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap }
+.row.main{ justify-content:center }
+.round{ width:44px; height:44px; border-radius:50%; border:1px solid var(--rule); background:var(--surface); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; font-size:13px; font-weight:700 }
+.round.play{ width:56px; height:56px; background:var(--lapis); color:var(--lapis-ink); border-color:var(--lapis); font-size:20px }
+.slider{ display:flex; align-items:center; gap:8px; flex:1 1 220px; min-width:0; font-size:13px; color:var(--muted) }
+.slider input{ flex:1; min-width:0; accent-color:var(--lapis) }
+.slider output{ font-variant-numeric:tabular-nums; color:var(--ink); font-weight:700; min-width:6ch; text-align:right }
+.progress{ width:100%; accent-color:var(--lapis) }
+.stat{ font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums; display:flex; justify-content:space-between; gap:10px }
+
+dialog{ border:1px solid var(--rule); border-radius:16px; background:var(--surface); color:var(--ink); width:min(640px, calc(100vw - 32px)); padding:16px }
+dialog::backdrop{ background:rgba(10,12,18,.45) }
+dialog textarea{ width:100%; box-sizing:border-box; min-height:40vh; border:1px solid var(--rule); border-radius:10px; background:var(--paper); color:var(--ink); padding:10px; font:14px/1.5 ui-monospace, Menlo, Consolas, monospace }
+dialog .row{ justify-content:flex-end; margin-top:10px }
+.sr{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0) }
+@media (prefers-reduced-motion: reduce){ *{ transition:none!important } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="mark">Decodex Reader</div>
+      <h1 id="docTitle">Loading…</h1>
+      <div class="meta" id="docMeta"></div>
+    </div>
+    <div class="actions">
+      <label class="btn primary" for="fileIn">Open .md</label>
+      <input id="fileIn" type="file" class="sr">
+      <button class="btn" id="pasteBtn" type="button">Paste text</button>
+      <button class="btn" id="themeBtn" type="button" aria-label="Change colour theme">Theme: Auto</button>
+    </div>
+  </header>
+
+  <div class="notice" id="notice" hidden></div>
+
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Mode">
+      <button type="button" id="mRead" data-mode="read" aria-pressed="true">Read</button>
+      <button type="button" id="mFlash" data-mode="flash" aria-pressed="false">Flash</button>
+      <button type="button" id="mListen" data-mode="listen" aria-pressed="false">Listen</button>
+    </div>
+    <select id="secSel" class="secsel" aria-label="Chapter"></select>
+    <label class="toggle"><input type="checkbox" id="bionicT"> Bold word starts</label>
+  </div>
+
+  <main>
+    <article id="readPane" class="reader"></article>
+    <div id="flashPane" class="flash" hidden>
+      <div class="where" id="flashWhere"></div>
+      <div class="lectern" id="lectern" role="button" tabindex="0" aria-label="Play or pause">
+        <div class="word" id="word" aria-live="off"><span class="l"></span><span class="p"></span><span class="r"></span></div>
+      </div>
+      <div class="hint">Tap the word or press space to play or pause. The red letter is where your eye should rest.</div>
+    </div>
+    <div id="listenPane" class="listen" hidden></div>
+  </main>
+</div>
+
+<div class="transport" id="tFlash" hidden>
+  <div class="inner">
+    <div class="row main">
+      <button class="round" id="fBack" type="button" aria-label="Back 10 words">−10</button>
+      <button class="round play" id="fPlay" type="button" aria-label="Play">▶</button>
+      <button class="round" id="fFwd" type="button" aria-label="Forward 10 words">+10</button>
+    </div>
+    <div class="row"><label class="slider" for="wpm">Speed <input id="wpm" type="range" min="150" max="900" step="25" value="350"><output id="wpmOut">350 wpm</output></label></div>
+    <input class="progress" id="fProg" type="range" min="0" max="0" value="0" aria-label="Position">
+    <div class="stat"><span id="fPos"></span><span id="fLeft"></span></div>
+  </div>
+</div>
+
+<div class="transport" id="tListen" hidden>
+  <div class="inner">
+    <div class="row main">
+      <button class="round" id="lPrev" type="button" aria-label="Previous sentence">◀︎◀︎</button>
+      <button class="round play" id="lPlay" type="button" aria-label="Play">▶</button>
+      <button class="round" id="lNext" type="button" aria-label="Next sentence">▶︎▶︎</button>
+    </div>
+    <div class="row">
+      <label class="slider" for="rate">Speed <input id="rate" type="range" min="0.6" max="2" step="0.1" value="1"><output id="rateOut">1.0×</output></label>
+      <select id="voiceSel" aria-label="Voice" style="flex:1 1 180px"></select>
+    </div>
+    <div class="stat"><span id="lPos"></span><span id="lLeft"></span></div>
+  </div>
+</div>
+
+<dialog id="pasteDlg">
+  <label for="pasteTxt" style="font-weight:700;display:block;margin-bottom:8px">Paste a Decodex or chapter (Markdown)</label>
+  <textarea id="pasteTxt" placeholder="# Title&#10;&#10;## Chapter 1…"></textarea>
+  <div class="row">
+    <button class="btn" type="button" id="pasteCancel">Cancel</button>
+    <button class="btn primary" type="button" id="pasteLoad">Load text</button>
+  </div>
+</dialog>
+
+<script>
+const SAMPLE = `---
+id: DX-0000
+tags: [decodex, origin/knowledge]
+---
+# Sample: The Book Before Books
+
+## Chapter 1: From Scroll to Codex
+
+For most of the ancient Mediterranean world, a long text lived on a [[Scroll|scroll]]. You unrolled it with one hand and rolled it up with the other, and finding a passage halfway through meant winding past everything before it.
+
+The [[Codex|codex]] changed that. Sheets were stacked, folded and bound along one edge, so a reader could open the text at any point. Romans already used hinged wax tablets for notes, and by the first century CE parchment notebooks in the same shape were in circulation.
+
+Early Christian communities adopted the codex with unusual enthusiasm, perhaps because it was cheap, portable and easy to search. Over the following centuries it overtook the scroll as the normal form of the book.
+
+> [!summary] Key points
+> - A scroll is read in order; a codex can be opened anywhere.
+> - The codex grew out of bound writing tablets.
+> - It became the dominant book form in late antiquity.
+
+| Form | Access | Material |
+|---|---|---|
+| Scroll | In order | Papyrus |
+| Codex | Any page | Parchment, papyrus |
+
+## Chapter 2: How to Use This Reader
+
+**Read** shows the text cleanly. Links, tags, tables and code from Obsidian are tidied away so nothing gets in the way.
+
+**Flash** shows one word at a time in the same spot, so your eyes stop moving across the page. Start around 300 words per minute and raise the speed once it feels easy. Sentences pause slightly longer at full stops.
+
+**Listen** reads the text aloud with your device's own voices, one sentence at a time. Tap any sentence to jump to it.
+
+The **Bold word starts** switch makes the opening letters of each word heavier. Some readers find this helps them keep focus, though studies so far have not shown that it improves speed or comprehension. Try it and keep it if it suits you.
+
+Open your own Markdown file to begin. Your place in each Decodex is remembered on this device.`;
+
+const $ = s => document.querySelector(s);
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d }catch(e){ return d } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)) }catch(e){} }
+};
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ---------- Markdown to plain sections ---------- */
+function cleanInline(t){
+  return t
+    .replace(/!\[\[[^\]]*\]\]/g, '')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2')
+    .replace(/\[\[([^\]#|]+)(#[^\]]*)?\]\]/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/\[\^[^\]]+\]/g, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/(\*\*|__)(.+?)\1/g, '$2')
+    .replace(/(^|[^\w*])\*(?!\s)(.+?)\*(?!\w)/g, '$1$2')
+    .replace(/(^|[^\w_])_(?!\s)(.+?)_(?!\w)/g, '$1$2')
+    .replace(/~~(.+?)~~/g, '$1')
+    .replace(/==(.+?)==/g, '$1')
+    .replace(/(^|\s)#[A-Za-z][\w/-]*/g, '$1')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function parseMd(src, fallbackTitle){
+  src = src.replace(/\r\n?/g, '\n').replace(/^﻿/, '');
+  src = src.replace(/^---\n[\s\S]*?\n---\n/, '');
+  src = src.replace(/^(```|~~~)[^\n]*\n[\s\S]*?^\1[^\n]*$/gm, '');
+  src = src.replace(/%%[\s\S]*?%%/g, '');
+  const sections = []; let cur = null, para = [], paraType = 'p', title = null, inTable = false;
+  const ensure = () => { if(!cur){ cur = { title: 'Opening', blocks: [] }; sections.push(cur) } };
+  const flush = () => {
+    if(para.length){ const t = cleanInline(para.join(' ')); if(t){ ensure(); cur.blocks.push({ type: paraType, text: t }) } }
+    para = []; paraType = 'p';
+  };
+  const listRe = /^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?(.*)$/;
+  for(const raw of src.split('\n')){
+    const line = raw.replace(/\s+$/, '');
+    if(!line.trim()){ flush(); inTable = false; continue }
+    if(/^\s*\|/.test(line)){
+      flush();
+      if(!inTable){ ensure(); cur.blocks.push({ type: 'note', text: 'A table is not shown here. Open the original note to see it.' }); inTable = true }
+      continue;
+    }
+    inTable = false;
+    let m;
+    if((m = line.match(/^(#{1,6})\s+(.*)$/))){
+      flush();
+      const lvl = m[1].length, t = cleanInline(m[2]);
+      if(!t) continue;
+      if(lvl === 1 && !title) title = t;
+      if(lvl <= 2){ cur = { title: t, blocks: [] }; sections.push(cur) }
+      else { ensure(); cur.blocks.push({ type: 'h', text: t }) }
+      continue;
+    }
+    if(/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)){ flush(); continue }
+    if((m = line.match(/^\s*>+\s?(.*)$/))){
+      const inner = m[1];
+      const c = inner.match(/^\[!(\w+)\][+-]?\s*(.*)$/);
+      if(c){ flush(); const t = cleanInline(c[2] || c[1]); if(t){ ensure(); cur.blocks.push({ type: 'h', text: t }) } continue }
+      if(!inner.trim()){ flush(); continue }
+      const li = inner.match(listRe);
+      if(li){ flush(); const t = cleanInline(li[1]); if(t){ ensure(); cur.blocks.push({ type: 'li', text: t }) } continue }
+      if(paraType !== 'quote'){ flush(); paraType = 'quote' }
+      para.push(inner.trim()); continue;
+    }
+    if((m = line.match(listRe))){ flush(); const t = cleanInline(m[1]); if(t){ ensure(); cur.blocks.push({ type: 'li', text: t }) } continue }
+    if(paraType === 'quote') flush();
+    para.push(line.trim());
+  }
+  flush();
+  const kept = sections.filter(s => s.blocks.length);
+  return { title: title || fallbackTitle || 'Untitled', sections: kept };
+}
+
+/* ---------- Derived streams ---------- */
+const SAY = [[/\be\.g\./gi, 'for example'], [/\bi\.e\./gi, 'that is'], [/\betc\./gi, 'et cetera'], [/\bvs\.?\b/gi, 'versus'], [/(\d)\s?%/g, '$1 percent'], [/&/g, ' and ']];
+const forSpeech = t => SAY.reduce((s, [re, r]) => s.replace(re, r), t);
+function splitSentences(t){
+  const out = t.match(/[^.!?]+(?:[.!?]+["'”’)\]]*|$)/g) || [t];
+  return out.map(s => s.trim()).filter(Boolean);
+}
+function build(doc){
+  const words = [], sentences = [], secWord = [], secSent = [];
+  doc.sections.forEach((s, si) => {
+    secWord[si] = words.length; secSent[si] = sentences.length;
+    s.title.split(/\s+/).forEach((w, i, a) => words.push({ w, si, head: true, end: i === a.length - 1 }));
+    sentences.push({ text: s.title, speak: forSpeech(s.title) + '.', si, kind: 'title' });
+    s.blocks.forEach(b => {
+      if(b.type === 'note') return;
+      const ws = b.text.split(/\s+/).filter(Boolean);
+      ws.forEach((w, i) => words.push({ w, si, head: b.type === 'h', end: i === ws.length - 1 }));
+      if(b.type === 'h'){ sentences.push({ text: b.text, speak: forSpeech(b.text) + '.', si, kind: 'h' }); return }
+      splitSentences(b.text).forEach((x, i, a) => sentences.push({ text: x, speak: forSpeech(x), si, kind: 's', last: i === a.length - 1 }));
+    });
+  });
+  return { words, sentences, secWord, secSent };
+}
+
+/* ---------- State ---------- */
+let doc, S, mode = 'read', wordIdx = 0, sentIdx = 0, docKey = '';
+const prefs = store.get('dx:prefs', { wpm: 350, rate: 1, bionic: false, voice: '' });
+
+function bionic(text){
+  return text.split(/(\s+)/).map(tok => {
+    if(!tok || /^\s+$/.test(tok)) return tok;
+    const m = tok.match(/^([^\p{L}\p{N}]*)([\p{L}\p{N}'’-]+)(.*)$/u);
+    if(!m) return esc(tok);
+    const n = m[2].length, k = n <= 3 ? 1 : n <= 5 ? 2 : Math.ceil(n * 0.4);
+    return esc(m[1]) + '<b>' + esc(m[2].slice(0, k)) + '</b>' + esc(m[2].slice(k) + m[3]);
+  }).join('');
+}
+const fmt = t => prefs.bionic ? bionic(t) : esc(t);
+
+function notice(msg, kind){ const n = $('#notice'); n.textContent = msg || ''; n.hidden = !msg; n.dataset.kind = kind || '' }
+
+function loadDoc(text, name, isSample){
+  const d = parseMd(text, name ? name.replace(/\.(md|markdown|txt)$/i, '') : '');
+  if(!d.sections.length){ notice('That file has no readable text. Check it is a Markdown or plain text file.', 'error'); return }
+  stopAll();
+  doc = d; S = build(doc);
+  docKey = 'dx:pos:' + doc.title;
+  const pos = store.get(docKey, { w: 0, s: 0 });
+  wordIdx = Math.min(pos.w || 0, S.words.length - 1); sentIdx = Math.min(pos.s || 0, S.sentences.length - 1);
+  $('#docTitle').textContent = doc.title;
+  const mins = Math.max(1, Math.round(S.words.length / 230));
+  $('#docMeta').textContent = `${doc.sections.length} ${doc.sections.length === 1 ? 'section' : 'sections'} · ${S.words.length.toLocaleString()} words · about ${mins} min to read`;
+  notice(isSample ? 'This is a sample. Open a .md file or paste text to read your own Decodex.' : '');
+  $('#secSel').innerHTML = doc.sections.map((s, i) => `<option value="${i}">${esc(s.title)}</option>`).join('');
+  $('#fProg').max = S.words.length - 1;
+  renderRead(); renderWord(); renderListen(true); syncSection();
+}
+
+function savePos(){ if(docKey) store.set(docKey, { w: wordIdx, s: sentIdx }) }
+function savePrefs(){ store.set('dx:prefs', prefs) }
+
+/* ---------- Read ---------- */
+function renderRead(){
+  const p = $('#readPane'); p.classList.toggle('bionic', prefs.bionic);
+  p.innerHTML = doc.sections.map((s, i) => {
+    let html = `<section id="sec${i}"><h2>${fmt(s.title)}</h2>`, inList = false;
+    for(const b of s.blocks){
+      if(b.type === 'li'){ if(!inList){ html += '<ul>'; inList = true } html += `<li>${fmt(b.text)}</li>`; continue }
+      if(inList){ html += '</ul>'; inList = false }
+      if(b.type === 'h') html += `<h3>${fmt(b.text)}</h3>`;
+      else if(b.type === 'quote') html += `<blockquote>${fmt(b.text)}</blockquote>`;
+      else if(b.type === 'note') html += `<p class="note">${esc(b.text)}</p>`;
+      else html += `<p>${fmt(b.text)}</p>`;
+    }
+    if(inList) html += '</ul>';
+    return html + '</section>';
+  }).join('');
+}
+
+/* ---------- Flash ---------- */
+let fTimer = null, flashing = false;
+function orp(n){ return n <= 1 ? 0 : n <= 5 ? 1 : n <= 9 ? 2 : n <= 13 ? 3 : 4 }
+function renderWord(){
+  const it = S.words[wordIdx]; if(!it) return;
+  const w = it.w, lead = (w.match(/^[^\p{L}\p{N}]*/u) || [''])[0].length;
+  const core = w.slice(lead).replace(/[^\p{L}\p{N}]+$/u, '');
+  const i = Math.min(w.length - 1, lead + orp(core.length || w.length));
+  const el = $('#word');
+  el.children[0].textContent = w.slice(0, i); el.children[1].textContent = w[i] || ''; el.children[2].textContent = w.slice(i + 1);
+  el.style.fontWeight = it.head ? '700' : '400';
+  $('#flashWhere').textContent = doc.sections[it.si].title;
+  $('#fProg').value = wordIdx;
+  $('#fPos').textContent = `Word ${(wordIdx + 1).toLocaleString()} of ${S.words.length.toLocaleString()}`;
+  const left = Math.ceil((S.words.length - wordIdx) / prefs.wpm);
+  $('#fLeft').textContent = `${left} min left at this speed`;
+}
+function delayFor(it){
+  let d = 60000 / prefs.wpm;
+  if(/[.!?]["'”’)\]]*$/.test(it.w)) d *= 2.2;
+  else if(/[,;:–—]["'”’)\]]*$/.test(it.w)) d *= 1.5;
+  if(it.w.length > 8) d *= 1.25;
+  if(it.end) d *= it.head ? 2.5 : 1.6;
+  return d;
+}
+function tick(){
+  if(!flashing) return;
+  renderWord(); syncSection();
+  const it = S.words[wordIdx];
+  fTimer = setTimeout(() => {
+    if(wordIdx >= S.words.length - 1){ stopFlash(); return }
+    wordIdx++; if(wordIdx % 25 === 0) savePos(); tick();
+  }, delayFor(it));
+}
+function playFlash(){ if(wordIdx >= S.words.length - 1) wordIdx = 0; flashing = true; $('#fPlay').textContent = '❚❚'; $('#fPlay').setAttribute('aria-label', 'Pause'); wake(true); tick() }
+function stopFlash(){ flashing = false; clearTimeout(fTimer); $('#fPlay').textContent = '▶'; $('#fPlay').setAttribute('aria-label', 'Play'); wake(false); savePos() }
+const toggleFlash = () => flashing ? stopFlash() : playFlash();
+function jumpWord(i){ wordIdx = Math.max(0, Math.min(S.words.length - 1, i)); renderWord(); syncSection(); savePos() }
+
+/* ---------- Listen ---------- */
+const synth = 'speechSynthesis' in window ? window.speechSynthesis : null;
+let voices = [], voice = null, listening = false, tok = 0, shownSec = -1;
+function loadVoices(){
+  if(!synth) return;
+  voices = synth.getVoices().filter(v => /^en/i.test(v.lang));
+  if(!voices.length) voices = synth.getVoices();
+  const sel = $('#voiceSel');
+  sel.innerHTML = voices.map((v, i) => `<option value="${i}">${esc(v.name)} (${esc(v.lang)})</option>`).join('');
+  let i = voices.findIndex(v => v.name === prefs.voice);
+  if(i < 0) i = voices.findIndex(v => /en[-_]GB/i.test(v.lang));
+  if(i < 0) i = 0;
+  if(voices[i]){ sel.value = i; voice = voices[i] }
+}
+function renderListen(force){
+  const it = S.sentences[sentIdx]; if(!it) return;
+  if(force || it.si !== shownSec){
+    shownSec = it.si;
+    const start = S.secSent[it.si], end = it.si + 1 < S.secSent.length ? S.secSent[it.si + 1] : S.sentences.length;
+    let html = '';
+    for(let k = start; k < end; k++){
+      const s = S.sentences[k];
+      if(s.kind === 'title') html += `<h2 class="s" data-i="${k}">${fmt(s.text)}</h2>`;
+      else if(s.kind === 'h') html += `<span class="s h" data-i="${k}">${fmt(s.text)}</span>`;
+      else html += `<span class="s" data-i="${k}">${fmt(s.text)}</span> ${s.last ? '<span class="gap"></span>' : ''}`;
+    }
+    $('#listenPane').innerHTML = html;
+    $('#listenPane').classList.toggle('bionic', prefs.bionic);
+  }
+  document.querySelectorAll('#listenPane .on').forEach(e => e.classList.remove('on'));
+  const el = document.querySelector(`#listenPane [data-i="${sentIdx}"]`);
+  if(el){ el.classList.add('on'); if(mode === 'listen' && listening) el.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }) }
+  $('#lPos').textContent = `Sentence ${sentIdx + 1} of ${S.sentences.length}`;
+  const wordsLeft = S.sentences.slice(sentIdx).reduce((n, s) => n + s.text.split(/\s+/).length, 0);
+  $('#lLeft').textContent = `about ${Math.max(1, Math.round(wordsLeft / (155 * prefs.rate)))} min left`;
+}
+function speakAt(i){
+  sentIdx = Math.max(0, Math.min(S.sentences.length - 1, i));
+  renderListen(); syncSection(); savePos();
+  if(!listening || !synth) return;
+  const my = ++tok;
+  const u = new SpeechSynthesisUtterance(S.sentences[sentIdx].speak);
+  if(voice){ u.voice = voice; u.lang = voice.lang } else u.lang = 'en-GB';
+  u.rate = prefs.rate;
+  u.onend = () => { if(my !== tok || !listening) return; if(sentIdx < S.sentences.length - 1) speakAt(sentIdx + 1); else stopListen() };
+  u.onerror = e => { if(my !== tok || /interrupted|canceled/.test(e.error)) return; stopListen(); notice('Speech stopped: ' + e.error + '. Try another voice.', 'error') };
+  const go = () => { if(my === tok && listening) synth.speak(u) };
+  if(synth.speaking || synth.pending){ synth.cancel(); setTimeout(go, 60) } else go();
+}
+function playListen(){
+  if(!synth){ notice('This browser cannot read aloud. Try Safari or Chrome.', 'error'); return }
+  if(sentIdx >= S.sentences.length - 1) sentIdx = 0;
+  listening = true; $('#lPlay').textContent = '❚❚'; $('#lPlay').setAttribute('aria-label', 'Pause'); wake(true); speakAt(sentIdx);
+}
+function stopListen(){ listening = false; tok++; if(synth) synth.cancel(); $('#lPlay').textContent = '▶'; $('#lPlay').setAttribute('aria-label', 'Play'); wake(false); savePos() }
+const toggleListen = () => listening ? stopListen() : playListen();
+
+/* ---------- Shared ---------- */
+let lock = null;
+async function wake(on){
+  try{
+    if(on && 'wakeLock' in navigator && !lock){ lock = await navigator.wakeLock.request('screen'); lock.addEventListener('release', () => lock = null) }
+    if(!on && lock){ await lock.release(); lock = null }
+  }catch(e){ lock = null }
+}
+function stopAll(){ if(flashing) stopFlash(); if(listening) stopListen() }
+function currentSec(){ return mode === 'flash' ? S.words[wordIdx].si : mode === 'listen' ? S.sentences[sentIdx].si : +$('#secSel').value || 0 }
+function syncSection(){ if(mode !== 'read') $('#secSel').value = currentSec() }
+function setMode(m){
+  stopAll(); mode = m;
+  for(const b of document.querySelectorAll('.seg button')) b.setAttribute('aria-pressed', b.dataset.mode === m);
+  $('#readPane').hidden = m !== 'read'; $('#flashPane').hidden = m !== 'flash'; $('#listenPane').hidden = m !== 'listen';
+  $('#tFlash').hidden = m !== 'flash'; $('#tListen').hidden = m !== 'listen';
+  if(m === 'flash') renderWord();
+  if(m === 'listen') renderListen(true);
+  syncSection();
+  store.set('dx:mode', m);
+}
+
+/* ---------- Wiring ---------- */
+document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+$('#secSel').addEventListener('change', e => {
+  const i = +e.target.value;
+  if(mode === 'read') document.getElementById('sec' + i)?.scrollIntoView({ block: 'start' });
+  else if(mode === 'flash'){ const was = flashing; stopFlash(); jumpWord(S.secWord[i]); if(was) playFlash() }
+  else { const was = listening; if(was) speakAt(S.secSent[i]); else { sentIdx = S.secSent[i]; renderListen(true); savePos() } }
+});
+$('#bionicT').checked = prefs.bionic;
+$('#bionicT').addEventListener('change', e => { prefs.bionic = e.target.checked; savePrefs(); renderRead(); renderListen(true) });
+
+$('#lectern').addEventListener('click', toggleFlash);
+$('#fPlay').addEventListener('click', toggleFlash);
+$('#fBack').addEventListener('click', () => jumpWord(wordIdx - 10));
+$('#fFwd').addEventListener('click', () => jumpWord(wordIdx + 10));
+$('#fProg').addEventListener('input', e => jumpWord(+e.target.value));
+$('#wpm').value = prefs.wpm; $('#wpmOut').textContent = prefs.wpm + ' wpm';
+$('#wpm').addEventListener('input', e => { prefs.wpm = +e.target.value; $('#wpmOut').textContent = prefs.wpm + ' wpm'; savePrefs(); renderWord() });
+
+$('#lPlay').addEventListener('click', toggleListen);
+$('#lPrev').addEventListener('click', () => speakAt(sentIdx - 1));
+$('#lNext').addEventListener('click', () => speakAt(sentIdx + 1));
+$('#listenPane').addEventListener('click', e => { const s = e.target.closest('[data-i]'); if(s) speakAt(+s.dataset.i) });
+$('#rate').value = prefs.rate; $('#rateOut').textContent = (+prefs.rate).toFixed(1) + '×';
+$('#rate').addEventListener('input', e => { prefs.rate = +e.target.value; $('#rateOut').textContent = prefs.rate.toFixed(1) + '×'; savePrefs(); renderListen() });
+$('#rate').addEventListener('change', () => { if(listening) speakAt(sentIdx) });
+$('#voiceSel').addEventListener('change', e => { voice = voices[+e.target.value]; prefs.voice = voice ? voice.name : ''; savePrefs(); if(listening) speakAt(sentIdx) });
+if(synth){ loadVoices(); synth.addEventListener?.('voiceschanged', loadVoices) } else { $('#voiceSel').innerHTML = '<option>No voices available</option>' }
+
+document.addEventListener('keydown', e => {
+  if(e.target.closest('input,select,textarea,dialog')) return;
+  if(e.code === 'Space' && mode !== 'read'){ e.preventDefault(); mode === 'flash' ? toggleFlash() : toggleListen() }
+  if(mode === 'flash' && e.key === 'ArrowLeft') jumpWord(wordIdx - 10);
+  if(mode === 'flash' && e.key === 'ArrowRight') jumpWord(wordIdx + 10);
+});
+
+function readFile(f){
+  if(!f) return;
+  const r = new FileReader();
+  r.onload = () => loadDoc(String(r.result), f.name);
+  r.onerror = () => notice('That file could not be opened. Try saving it again as .md or .txt.', 'error');
+  r.readAsText(f);
+}
+$('#fileIn').addEventListener('change', e => { readFile(e.target.files[0]); e.target.value = '' });
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => { e.preventDefault(); readFile(e.dataTransfer.files[0]) });
+const dlg = $('#pasteDlg');
+$('#pasteBtn').addEventListener('click', () => { $('#pasteTxt').value = ''; dlg.showModal ? dlg.showModal() : dlg.setAttribute('open', '') });
+$('#pasteCancel').addEventListener('click', () => dlg.close());
+$('#pasteLoad').addEventListener('click', () => { const t = $('#pasteTxt').value.trim(); if(!t) return; dlg.close(); loadDoc(t, 'Pasted text') });
+document.addEventListener('visibilitychange', () => { if(document.hidden && flashing) stopFlash() });
+
+const THEMES = ['auto', 'light', 'dark'];
+let theme = store.get('dx:theme', 'auto');
+function applyTheme(){
+  if(theme === 'auto') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', theme);
+  $('#themeBtn').textContent = 'Theme: ' + theme[0].toUpperCase() + theme.slice(1);
+}
+$('#themeBtn').addEventListener('click', () => { theme = THEMES[(THEMES.indexOf(theme) + 1) % 3]; store.set('dx:theme', theme); applyTheme() });
+if(theme !== 'auto') applyTheme();
+
+loadDoc(SAMPLE, '', true);
+setMode(store.get('dx:mode', 'read'));
+</script>
+</body>
+</html>
